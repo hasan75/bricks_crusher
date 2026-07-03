@@ -1,7 +1,7 @@
 // ============================================================
-//  Breakout — Step 9 + sound: soft synthesized cues
-//  Goal: short, quiet blips on paddle/brick/lose/win, synthesized
-//  via Web Audio (no asset files), with a mute toggle (press M).
+//  Breakout — juice pass: particle bursts, ball trail, paddle squash
+//  Goal: make hits FEEL good — a colored burst when a brick breaks,
+//  a soft comet-trail on the ball, and a quick squash on paddle hits.
 // ============================================================
 
 // 1) CONFIG — describes the game to Phaser.
@@ -203,6 +203,43 @@ function create() {
     this.muteText.setText(muteLabel());
   });
 
+  // --- Juice: a reusable "spark" texture for particle effects ---
+  // Phaser's particles need a texture, and we don't load image files — so we
+  // draw a tiny white dot once and reuse it (tinted per effect). Guarded with
+  // exists() so we don't re-generate it every time the scene restarts.
+  if (!this.textures.exists("spark")) {
+    const g = this.make.graphics({ add: false });
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(4, 4, 4);
+    g.generateTexture("spark", 8, 8);
+    g.destroy();
+  }
+
+  // Brick-break burst: an idle emitter we fire by hand in hitBrick(). It sits
+  // dormant (emitting:false) and sprays a few sparks on demand at the brick.
+  this.brickBurst = this.add.particles(0, 0, "spark", {
+    speed: { min: 60, max: 200 },
+    angle: { min: 0, max: 360 },   // fling outward in every direction
+    lifespan: 350,
+    scale: { start: 1, end: 0 },   // shrink to nothing
+    alpha: { start: 1, end: 0 },   // and fade out — no hard pop
+    emitting: false
+  });
+
+  // Ball trail: a soft amber comet-tail that continuously follows the ball.
+  this.ballTrail = this.add.particles(0, 0, "spark", {
+    follow: this.ball,
+    speed: 0,
+    lifespan: 250,
+    frequency: 25,                 // emit a dot every 25ms
+    scale: { start: 0.8, end: 0 },
+    alpha: { start: 0.45, end: 0 },// subtle, so it reads as a glow not clutter
+    tint: 0xfbbf24                 // match the ball's amber
+  });
+
+  // Draw the ball on top of its own trail and the bursts.
+  this.ball.setDepth(10);
+
   // --- End-of-game guard ---
   // A one-way flag so the win/lose check in update() fires exactly once,
   // not 60 times a second after the game ends.
@@ -239,8 +276,16 @@ function resetBall(scene) {
 // (ball, brick). Because Step 6 passed `this` as the collider context,
 // `this` inside here is the Scene — so this.score / this.scoreText work.
 function hitBrick(ball, brick) {
+  // Grab the brick's spot and color before we destroy it, so the burst can
+  // match the brick and appear exactly where it was.
+  const bx = brick.x, by = brick.y, color = brick.fillColor;
   brick.destroy();   // remove the brick from the scene AND its group
   sfxBrick();        // soft blip
+
+  // Juice: a little burst of same-colored sparks where the brick was.
+  this.brickBurst.setParticleTint(color);
+  this.brickBurst.emitParticleAt(bx, by, 10);
+
   this.score += 10;  // reward: 10 points per brick
   this.scoreText.setText("Score: " + this.score); // redraw the label
 
@@ -262,6 +307,13 @@ function hitPaddle(ball, paddle) {
   const offset = ball.x - paddle.x;   // -50 (left edge) .. +50 (right edge)
   ball.body.setVelocityX(offset * 5); // scale the offset into a sideways push
   sfxPaddle();                        // quiet bounce tick
+
+  // Juice: a quick squash-and-stretch. yoyo:true springs it back to normal.
+  // We only tween the VISUAL scaleY — the physics body is unchanged, so
+  // collisions stay exactly the same.
+  this.tweens.add({
+    targets: paddle, scaleY: 0.6, duration: 70, yoyo: true, ease: "Quad.easeOut"
+  });
 }
 
 function update() {
