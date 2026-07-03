@@ -1,7 +1,7 @@
 // ============================================================
-//  Breakout — Step 9: polish (angle bounce, speed-up, lives)
-//  Goal: paddle position steers the bounce, the ball speeds up as
-//  bricks break, and you get 3 lives before GAME OVER.
+//  Breakout — Step 9 + sound: soft synthesized cues
+//  Goal: short, quiet blips on paddle/brick/lose/win, synthesized
+//  via Web Audio (no asset files), with a mute toggle (press M).
 // ============================================================
 
 // 1) CONFIG — describes the game to Phaser.
@@ -31,6 +31,56 @@ const config = {
 
 // 3) Create the game. This boots everything above.
 const game = new Phaser.Game(config);
+
+// ---- Tiny sound engine (Web Audio — no audio files to download) ----
+// We SYNTHESIZE short, soft tones instead of loading .mp3/.wav assets.
+// Deliberately quiet and brief for accessibility, with fade in/out so
+// they never "click", and a mute toggle (press M). `muted` lives at module
+// scope so the preference sticks across restarts.
+let audioCtx = null;
+let muted = false;
+
+function playTone(freq, durationMs, volume) {
+  if (muted) return;
+
+  // Create the AudioContext lazily. Browsers only allow audio to start
+  // after a user gesture — by the time the ball is moving, that's happened.
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;                 // no Web Audio support → stay silent
+    audioCtx = new AC();
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sine";                 // sine = smooth, no harsh overtones
+  osc.frequency.value = freq;
+
+  const now = audioCtx.currentTime;
+  const dur = durationMs / 1000;
+  // Gentle attack + release envelope: ramp the volume up over 10ms and back
+  // down to 0 by the end, so the tone fades instead of starting/stopping
+  // abruptly (sudden edges cause a jarring click).
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+  gain.gain.linearRampToValueAtTime(0, now + dur);
+
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + dur);
+}
+
+// The four cues, tuned soft (volume ≤ 0.06) and short (≤ 200ms).
+function sfxBrick()  { playTone(660, 60, 0.05); }  // crisp high blip
+function sfxPaddle() { playTone(330, 50, 0.04); }  // low, quietest — happens most
+function sfxLose()   { playTone(200, 200, 0.06); } // low, longer "aww"
+function sfxWin()    { playTone(880, 160, 0.06); } // bright chime
+
+// Label for the on-screen mute indicator, reflecting the current state.
+function muteLabel() {
+  return muted ? "Sound: OFF (M)" : "Sound: on (M)";
+}
 
 // ---- The three lifecycle functions ----
 
@@ -138,6 +188,18 @@ function create() {
     fontSize: "20px", color: "#ffffff"
   }).setOrigin(1, 0);
 
+  // --- Mute toggle (accessibility) ---
+  // A visible control + keyboard shortcut so sound is easy to turn off.
+  // `muted` is module-level, so the choice persists across restarts; we
+  // just reflect its current value in the label here.
+  this.muteText = this.add.text(784, 578, muteLabel(), {
+    fontSize: "16px", color: "#c9c9e0"
+  }).setOrigin(1, 1);
+  this.input.keyboard.on("keydown-M", () => {
+    muted = !muted;
+    this.muteText.setText(muteLabel());
+  });
+
   // --- End-of-game guard ---
   // A one-way flag so the win/lose check in update() fires exactly once,
   // not 60 times a second after the game ends.
@@ -175,6 +237,7 @@ function resetBall(scene) {
 // `this` inside here is the Scene — so this.score / this.scoreText work.
 function hitBrick(ball, brick) {
   brick.destroy();   // remove the brick from the scene AND its group
+  sfxBrick();        // soft blip
   this.score += 10;  // reward: 10 points per brick
   this.scoreText.setText("Score: " + this.score); // redraw the label
 
@@ -195,6 +258,7 @@ function hitBrick(ball, brick) {
 function hitPaddle(ball, paddle) {
   const offset = ball.x - paddle.x;   // -50 (left edge) .. +50 (right edge)
   ball.body.setVelocityX(offset * 5); // scale the offset into a sideways push
+  sfxPaddle();                        // quiet bounce tick
 }
 
 function update() {
@@ -213,8 +277,10 @@ function update() {
     this.livesText.setText("Lives: " + this.lives);
 
     if (this.lives <= 0) {
+      sfxLose();
       endGame(this, "GAME OVER");   // out of lives → the game is over
     } else {
+      sfxLose();                    // same low "aww" for a lost life
       resetBall(this);              // still alive → re-serve the ball
     }
     return;
@@ -223,6 +289,7 @@ function update() {
   // --- Win: every brick is gone ---
   // countActive() counts the still-alive members of the static group.
   if (this.bricks.countActive() === 0) {
+    sfxWin();
     endGame(this, "YOU WIN!");
     return;
   }
