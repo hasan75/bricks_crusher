@@ -1,6 +1,7 @@
 // ============================================================
-//  Breakout — Step 7: keep score and show it on screen
-//  Goal: a score that goes up as bricks break, displayed top-left.
+//  Breakout — Step 8: win & lose conditions + restart
+//  Goal: "YOU WIN!" when all bricks are gone, "GAME OVER" if the
+//  ball falls out the bottom; press SPACE to play again.
 // ============================================================
 
 // 1) CONFIG — describes the game to Phaser.
@@ -55,6 +56,12 @@ function create() {
 
   // Give the ball a PHYSICS BODY so the engine can move it for us.
   this.physics.add.existing(this.ball);
+
+  // --- Open the floor ---
+  // By default the ball bounces off all four world edges. We turn OFF the
+  // bottom edge so the ball can fall out when we miss it (our lose check).
+  // args: left, right, up, DOWN — down = false leaves the bottom open.
+  this.physics.world.setBoundsCollision(true, true, true, false);
 
   // Now configure that body (reached via this.ball.body):
   this.ball.body.setCircle(10);            // treat the body as a circle, r=10
@@ -122,6 +129,28 @@ function create() {
   this.scoreText = this.add.text(16, 16, "Score: 0", {
     fontSize: "20px", color: "#ffffff"
   });
+
+  // --- End-of-game guard ---
+  // A one-way flag so the win/lose check in update() fires exactly once,
+  // not 60 times a second after the game ends.
+  this.gameOver = false;
+}
+
+// Ends the game: freeze the world, show a message, and wait for SPACE to
+// restart. We take `scene` as an argument because update() will call this
+// as endGame(this, ...), passing the Scene explicitly.
+function endGame(scene, message) {
+  scene.gameOver = true;
+  scene.physics.pause();                 // freeze all physics bodies
+  scene.ball.body.setVelocity(0, 0);     // and make sure the ball is still
+
+  scene.add.text(400, 300, message + "\nPress SPACE to play again", {
+    fontSize: "32px", color: "#ffffff", align: "center"
+  }).setOrigin(0.5);                     // center the text on that point
+
+  // .once = fire this handler a single time, then forget it. restart()
+  // rebuilds the Scene from scratch (create() runs again → fresh board).
+  scene.input.keyboard.once("keydown-SPACE", () => scene.scene.restart());
 }
 
 // Called on each ball–brick collision. Phaser passes the two objects
@@ -137,6 +166,25 @@ function hitBrick(ball, brick) {
 function update() {
   // This runs ~60 times per second. Each call, we decide where the
   // paddle should be and nudge it there.
+
+  // Once the game has ended, stop running the loop's logic. Otherwise
+  // we'd keep moving the paddle and re-triggering end conditions.
+  if (this.gameOver) {
+    return;
+  }
+
+  // --- Lose: the ball fell out the (now open) bottom ---
+  if (this.ball.y > 600) {
+    endGame(this, "GAME OVER");
+    return;
+  }
+
+  // --- Win: every brick is gone ---
+  // countActive() counts the still-alive members of the static group.
+  if (this.bricks.countActive() === 0) {
+    endGame(this, "YOU WIN!");
+    return;
+  }
 
   // --- Mouse / trackpad control ---
   // this.input.x is the pointer's current x position over the canvas.
