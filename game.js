@@ -9,7 +9,7 @@ const config = {
   type: Phaser.AUTO,        // let Phaser pick WebGL, fall back to Canvas
   width: 800,               // game width in pixels
   height: 600,              // game height in pixels
-  backgroundColor: "#2d2d4d", // a calm dark-blue so we can see the canvas
+  backgroundColor: "#0f172a", // deep slate navy — calm, high-contrast base
 
   // PHYSICS — turn on the "arcade" engine: simple, fast, grid-style
   // physics that's perfect for bouncing balls and paddles.
@@ -93,7 +93,8 @@ function create() {
   // A rectangle 100 wide, 20 tall. We place it near the bottom-center.
   // x = 400 (middle of an 800-wide screen), y = 550 (near the bottom).
   // 0x... is a hex color, like CSS #ffffff but with 0x instead of #.
-  this.paddle = this.add.rectangle(400, 550, 100, 20, 0xffffff);
+  // Soft slate-white (not harsh pure white) reads cleanly on the navy.
+  this.paddle = this.add.rectangle(400, 550, 100, 20, 0xe2e8f0);
 
   // Give the paddle a physics body too, so the ball can collide with it.
   this.physics.add.existing(this.paddle);
@@ -101,8 +102,9 @@ function create() {
   this.paddle.body.setAllowGravity(false); // (gravity is already 0, but explicit)
 
   // --- The ball ---
-  // A circle of radius 10, sitting just above the paddle.
-  this.ball = this.add.circle(400, 520, 10, 0xff4444);
+  // A circle of radius 10, sitting just above the paddle. Warm amber is the
+  // one accent color — it pops against the cool bricks and background.
+  this.ball = this.add.circle(400, 520, 10, 0xfbbf24);
 
   // Give the ball a PHYSICS BODY so the engine can move it for us.
   this.physics.add.existing(this.ball);
@@ -147,8 +149,9 @@ function create() {
   const OFFSET_X = 44;            // left margin before the first brick
   const OFFSET_Y = 80;            // top margin before the first row
 
-  // One color per row, so the wall looks like classic Breakout.
-  const rowColors = [0xff5555, 0xffaa33, 0xffee33, 0x55dd55, 0x55aaff];
+  // A cohesive violet→cyan gradient (top to bottom): analogous hues that
+  // harmonize, while each row stays distinct enough to read at a glance.
+  const rowColors = [0xa78bfa, 0x818cf8, 0x60a5fa, 0x38bdf8, 0x22d3ee];
 
   // Outer loop = rows (top to bottom), inner loop = columns (left to right).
   for (let row = 0; row < ROWS; row++) {
@@ -177,7 +180,7 @@ function create() {
   // top-left corner. We keep a reference (this.scoreText) so we can update
   // its contents later, in hitBrick().
   this.scoreText = this.add.text(16, 16, "Score: 0", {
-    fontSize: "20px", color: "#ffffff"
+    fontSize: "20px", color: "#e2e8f0"
   });
 
   // --- Lives ---
@@ -185,7 +188,7 @@ function create() {
   // by its top-right corner so it stays pinned to x=784 as the number grows.
   this.lives = 3;
   this.livesText = this.add.text(784, 16, "Lives: 3", {
-    fontSize: "20px", color: "#ffffff"
+    fontSize: "20px", color: "#e2e8f0"
   }).setOrigin(1, 0);
 
   // --- Mute toggle (accessibility) ---
@@ -193,7 +196,7 @@ function create() {
   // `muted` is module-level, so the choice persists across restarts; we
   // just reflect its current value in the label here.
   this.muteText = this.add.text(784, 578, muteLabel(), {
-    fontSize: "16px", color: "#c9c9e0"
+    fontSize: "16px", color: "#94a3b8"
   }).setOrigin(1, 1);
   this.input.keyboard.on("keydown-M", () => {
     muted = !muted;
@@ -215,7 +218,7 @@ function endGame(scene, message) {
   scene.ball.body.setVelocity(0, 0);     // and make sure the ball is still
 
   scene.add.text(400, 300, message + "\nPress SPACE to play again", {
-    fontSize: "32px", color: "#ffffff", align: "center"
+    fontSize: "32px", color: "#f8fafc", align: "center"
   }).setOrigin(0.5);                     // center the text on that point
 
   // .once = fire this handler a single time, then forget it. restart()
