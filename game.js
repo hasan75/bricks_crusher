@@ -1,7 +1,7 @@
 // ============================================================
-//  Breakout — Step 8: win & lose conditions + restart
-//  Goal: "YOU WIN!" when all bricks are gone, "GAME OVER" if the
-//  ball falls out the bottom; press SPACE to play again.
+//  Breakout — Step 9: polish (angle bounce, speed-up, lives)
+//  Goal: paddle position steers the bounce, the ball speeds up as
+//  bricks break, and you get 3 lives before GAME OVER.
 // ============================================================
 
 // 1) CONFIG — describes the game to Phaser.
@@ -80,9 +80,9 @@ function create() {
 
   // --- Make the ball and paddle collide ---
   // A "collider" tells physics: keep these two from overlapping, and
-  // bounce them apart when they touch. Since the paddle is immovable
-  // and the ball has bounce = 1, the ball ricochets off cleanly.
-  this.physics.add.collider(this.ball, this.paddle);
+  // bounce them apart when they touch. The 3rd argument is a callback
+  // (hitPaddle) so we can steer the bounce angle by where the ball lands.
+  this.physics.add.collider(this.ball, this.paddle, hitPaddle, null, this);
 
   // --- Build the brick wall ---
   // A "static group" holds many non-moving physics objects together,
@@ -130,6 +130,14 @@ function create() {
     fontSize: "20px", color: "#ffffff"
   });
 
+  // --- Lives ---
+  // Start with 3. We show them top-RIGHT; setOrigin(1, 0) anchors the text
+  // by its top-right corner so it stays pinned to x=784 as the number grows.
+  this.lives = 3;
+  this.livesText = this.add.text(784, 16, "Lives: 3", {
+    fontSize: "20px", color: "#ffffff"
+  }).setOrigin(1, 0);
+
   // --- End-of-game guard ---
   // A one-way flag so the win/lose check in update() fires exactly once,
   // not 60 times a second after the game ends.
@@ -153,6 +161,14 @@ function endGame(scene, message) {
   scene.input.keyboard.once("keydown-SPACE", () => scene.scene.restart());
 }
 
+// Re-serves the ball after a life is lost: drop it back above the paddle
+// and give it the original starting speed (this also clears any speed-up
+// it had built from breaking bricks).
+function resetBall(scene) {
+  scene.ball.setPosition(400, 520);
+  scene.ball.body.setVelocity(200, -200);
+}
+
 // Called on each ball–brick collision. Phaser passes the two objects
 // that collided, in the same order we listed them in the collider:
 // (ball, brick). Because Step 6 passed `this` as the collider context,
@@ -161,6 +177,24 @@ function hitBrick(ball, brick) {
   brick.destroy();   // remove the brick from the scene AND its group
   this.score += 10;  // reward: 10 points per brick
   this.scoreText.setText("Score: " + this.score); // redraw the label
+
+  // --- Speed up ---
+  // Nudge the ball 3% faster each break so the game ramps in difficulty.
+  // We scale the whole velocity vector, so direction is unchanged. A cap
+  // keeps it from getting so fast it tunnels through the paddle.
+  const speed = ball.body.velocity.length();     // current speed (px/sec)
+  if (speed < 500) {
+    ball.body.velocity.scale(1.03);
+  }
+}
+
+// Called when the ball hits the paddle. Classic Breakout feel: the ball's
+// horizontal velocity depends on WHERE it struck the paddle. Hit the left
+// edge → it heads left; hit the right edge → it heads right; dead center →
+// it goes nearly straight up.
+function hitPaddle(ball, paddle) {
+  const offset = ball.x - paddle.x;   // -50 (left edge) .. +50 (right edge)
+  ball.body.setVelocityX(offset * 5); // scale the offset into a sideways push
 }
 
 function update() {
@@ -173,9 +207,16 @@ function update() {
     return;
   }
 
-  // --- Lose: the ball fell out the (now open) bottom ---
+  // --- Lose a life: the ball fell out the (now open) bottom ---
   if (this.ball.y > 600) {
-    endGame(this, "GAME OVER");
+    this.lives -= 1;
+    this.livesText.setText("Lives: " + this.lives);
+
+    if (this.lives <= 0) {
+      endGame(this, "GAME OVER");   // out of lives → the game is over
+    } else {
+      resetBall(this);              // still alive → re-serve the ball
+    }
     return;
   }
 
