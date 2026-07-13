@@ -35,6 +35,9 @@ screen, three levels, power-ups, sound, and a persistent high score.
   visible **mute toggle** (press `M`).
 - **Juice** — particle bursts when bricks break, a ball trail, a paddle-squash
   tween, and floating toast messages for level-ups and pickups.
+- **Sprite art** — rounded, beveled "Kenney-style" sprites (paddle, ball, bricks,
+  power-ups, laser) generated at runtime in `textures.js` and recolored via tint —
+  no image files to download.
 
 ---
 
@@ -84,6 +87,7 @@ game_dev/
     ├── main.js           # entry point: builds the Phaser.Game from the scenes
     ├── config.js         # pure data: canvas size, colors, LEVELS, POWERUPS
     ├── sound.js          # the Web-Audio Sound engine (synthesized tones)
+    ├── textures.js       # ensureTextures(): generates the sprite art at runtime
     ├── storage.js        # getHighScore / setHighScore (localStorage)
     └── scenes/
         ├── TitleScene.js     # name, controls, best score → Space to start
@@ -172,12 +176,16 @@ Built as a series of small, working checkpoints — each one adds a single conce
 - Levels, power-ups & high score, plus title / game-over / pause scenes
 - More power-ups (Extra life, Sticky, Laser) with leveled drops
 - Per-row scoring (higher rows pay more)
+- Sprite art — runtime-generated "Kenney-style" textures
 
 ## 🧊 Ideas / roadmap
 
-Not yet implemented:
+The planned roadmap is complete. Possible next steps:
 
-- **Real sprite art** — swap the drawn rectangles/circles for loaded textures.
+- **Real art pack** — swap the runtime textures for a downloaded Kenney sprite
+  sheet (load PNGs in each scene's `preload()`, drop the makers in `textures.js`).
+- **Themed background** / parallax instead of the flat navy.
+- **Animated sprites** and more levels / an endless mode.
 
 ---
 

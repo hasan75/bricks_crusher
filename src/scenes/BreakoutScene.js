@@ -3,6 +3,7 @@
 // module), so we don't import it; we only import our own modules.
 import { Sound } from "../sound.js";
 import { getHighScore, setHighScore } from "../storage.js";
+import { ensureTextures } from "../textures.js";
 import {
   BRICK_COLORS, LEVELS, POWERUPS, POWERUP_TYPES,
   LEVEL_POWERUPS, POWERUP_DROP_CHANCE, SLOW_FACTOR,
@@ -34,6 +35,10 @@ export class BreakoutScene extends Phaser.Scene {
 
     this.loadHighScore();
 
+    // Bake the sprite textures (rounded/beveled "Kenney-style") into the cache
+    // before we build anything, so every object below is a textured image.
+    ensureTextures(this);
+
     // Remember the best we started with, so Game Over can tell if this run
     // set a NEW record (the live `highScore` gets bumped as we play).
     this.previousBest = this.highScore;
@@ -51,9 +56,9 @@ export class BreakoutScene extends Phaser.Scene {
 
   // --- The paddle ---
   buildPaddle() {
-    // Soft slate-white, 100×20, near the bottom-center. We widen it later by
-    // SCALING (not resizing geometry), so 100 stays its "base" width.
-    this.paddle = this.add.rectangle(400, 550, 100, 20, 0xe2e8f0);
+    // The "paddle" sprite is 100×20, so 100 stays its base width; the Wide
+    // power-up SCALES it (see setPaddleScale) rather than resizing geometry.
+    this.paddle = this.add.image(400, 550, "paddle");
     this.physics.add.existing(this.paddle);
     this.paddle.body.setImmovable(true);
     this.paddle.body.setAllowGravity(false);
@@ -109,8 +114,11 @@ export class BreakoutScene extends Phaser.Scene {
         if (ch === ".") continue;    // gap → no brick here
         const x = OFFSET_X + col * (BRICK_W + GAP) + BRICK_W / 2;
         const y = OFFSET_Y + row * (BRICK_H + GAP) + BRICK_H / 2;
-        const brick = this.add.rectangle(x, y, BRICK_W, BRICK_H, BRICK_COLORS[ch]);
+        const color = BRICK_COLORS[ch];
+        // Grayscale "brick" sprite, recolored per row via tint.
+        const brick = this.add.image(x, y, "brick").setTint(color);
         brick.points = points;       // remembered for scoring when it breaks
+        brick.hitColor = color;      // remembered for the burst + "+N" popup
         this.bricks.add(brick);
       }
     }
@@ -130,7 +138,7 @@ export class BreakoutScene extends Phaser.Scene {
 
   // Create one ball with its own colliders and add it to the array.
   spawnBall(x, y, vx, vy) {
-    const ball = this.add.circle(x, y, 10, 0xfbbf24);
+    const ball = this.add.image(x, y, "ball");
     this.physics.add.existing(ball);
     ball.body.setCircle(10);
     ball.body.setBounce(1, 1);
@@ -177,8 +185,8 @@ export class BreakoutScene extends Phaser.Scene {
     // Only drop power-ups unlocked at the current level.
     const list = LEVEL_POWERUPS[this.level] || POWERUP_TYPES;
     const type = list[Phaser.Math.Between(0, list.length - 1)];
-    const pu = this.add.rectangle(x, y, 26, 16, POWERUPS[type].color)
-      .setStrokeStyle(2, 0x0f172a);
+    // Grayscale "powerup" capsule sprite, recolored per type via tint.
+    const pu = this.add.image(x, y, "powerup").setTint(POWERUPS[type].color);
     pu.puType = type;                // remember which power-up this is
     this.physics.add.existing(pu);
     pu.body.setAllowGravity(false);  // world gravity is 0; we push it down
@@ -300,7 +308,7 @@ export class BreakoutScene extends Phaser.Scene {
     this.lastFire = now;
     [-1, 1].forEach(side => {
       const lx = this.paddle.x + side * (this.paddle.displayWidth / 2 - 6);
-      const bolt = this.add.rectangle(lx, this.paddle.y - 16, 4, 14, 0x22d3ee);
+      const bolt = this.add.image(lx, this.paddle.y - 16, "laser");
       this.physics.add.existing(bolt);
       bolt.body.setAllowGravity(false);
       bolt.body.setVelocity(0, -520);
@@ -369,14 +377,7 @@ export class BreakoutScene extends Phaser.Scene {
 
   // --- Juice: particle burst + ball trail ---
   buildEffects() {
-    if (!this.textures.exists("spark")) {
-      const g = this.make.graphics({ add: false });
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(4, 4, 4);
-      g.generateTexture("spark", 8, 8);
-      g.destroy();
-    }
-
+    // The "spark" particle texture is created in ensureTextures() (create()).
     this.brickBurst = this.add.particles(0, 0, "spark", {
       speed: { min: 60, max: 200 },
       angle: { min: 0, max: 360 },
@@ -456,7 +457,7 @@ export class BreakoutScene extends Phaser.Scene {
   // Shared brick destruction: particles, sound, score, and the leveled drop.
   // Used by both the ball (hitBrick) and the laser (laserHitBrick).
   breakBrick(brick) {
-    const bx = brick.x, by = brick.y, color = brick.fillColor;
+    const bx = brick.x, by = brick.y, color = brick.hitColor ?? 0xffffff;
     const points = brick.points ?? BASE_POINTS;   // per-row value (top rows pay more)
     brick.destroy();
     Sound.brick();

@@ -1,6 +1,7 @@
 // scenes/TitleScene.js — the first screen: name, controls, best score.
 // `Phaser` is a global from the CDN <script> in index.html.
 import { getHighScore } from "../storage.js";
+import { ensureTextures } from "../textures.js";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -8,10 +9,12 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
-    // A row of colored blocks as a simple decorative "wall" under the title.
+    ensureTextures(this);   // so the decorative row uses the real brick sprite
+
+    // A row of brick sprites as a simple decorative "wall" under the title.
     const palette = [0xa78bfa, 0x818cf8, 0x60a5fa, 0x38bdf8, 0x22d3ee];
     palette.forEach((color, i) => {
-      this.add.rectangle(280 + i * 60, 150, 52, 22, color);
+      this.add.image(280 + i * 60, 150, "brick").setTint(color).setDisplaySize(52, 22);
     });
 
     this.add.text(400, 240, "BREAKOUT", {
