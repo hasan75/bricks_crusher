@@ -26,6 +26,8 @@ screen, three levels, power-ups, sound, and a persistent high score.
   - 🔵 **Laser** — tap **Space** to fire bolts that break bricks
 - **3 lives** and a classic **angle bounce** (where the ball hits the paddle
   steers its direction), with the ball speeding up slightly per brick.
+- **Per-row scoring** — higher (harder-to-reach) rows are worth more points, with
+  a floating **+N** popping up at each brick you break.
 - **High score** persisted between sessions via `localStorage`, with a live
   “Best” readout and a **NEW BEST!** flag on the Game Over screen.
 - **Accessibility-friendly sound** — short, soft tones **synthesized** with the
@@ -169,12 +171,12 @@ Built as a series of small, working checkpoints — each one adds a single conce
 - Refactor into scene classes, then modularize into ES modules
 - Levels, power-ups & high score, plus title / game-over / pause scenes
 - More power-ups (Extra life, Sticky, Laser) with leveled drops
+- Per-row scoring (higher rows pay more)
 
 ## 🧊 Ideas / roadmap
 
 Not yet implemented:
 
-- **Per-row scoring** — award more points for higher rows. *(up next)*
 - **Real sprite art** — swap the drawn rectangles/circles for loaded textures.
 
 ---

@@ -66,3 +66,9 @@ export const LEVEL_POWERUPS = [
 export const POWERUP_DROP_CHANCE = [16, 20, 24]; // % per brick, by level
 
 export const SLOW_FACTOR = 0.55;           // ball speed multiplier while Slow is active
+
+// Per-row scoring: a brick in the BOTTOM row is worth BASE_POINTS; each row
+// higher adds ROW_BONUS, so higher (harder-to-reach) rows pay more. The value
+// is computed per level from the layout's height, so it works for any layout.
+export const BASE_POINTS = 10;
+export const ROW_BONUS = 10;

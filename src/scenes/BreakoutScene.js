@@ -5,7 +5,8 @@ import { Sound } from "../sound.js";
 import { getHighScore, setHighScore } from "../storage.js";
 import {
   BRICK_COLORS, LEVELS, POWERUPS, POWERUP_TYPES,
-  LEVEL_POWERUPS, POWERUP_DROP_CHANCE, SLOW_FACTOR
+  LEVEL_POWERUPS, POWERUP_DROP_CHANCE, SLOW_FACTOR,
+  BASE_POINTS, ROW_BONUS
 } from "../config.js";
 
 export class BreakoutScene extends Phaser.Scene {
@@ -100,12 +101,16 @@ export class BreakoutScene extends Phaser.Scene {
 
     for (let row = 0; row < layout.length; row++) {
       const line = layout[row];
+      // Higher rows are worth more: bottom row = BASE_POINTS, +ROW_BONUS per
+      // row up. `row` is 0 at the top, so distance from the bottom is the bonus.
+      const points = BASE_POINTS + (layout.length - 1 - row) * ROW_BONUS;
       for (let col = 0; col < line.length; col++) {
         const ch = line[col];
         if (ch === ".") continue;    // gap → no brick here
         const x = OFFSET_X + col * (BRICK_W + GAP) + BRICK_W / 2;
         const y = OFFSET_Y + row * (BRICK_H + GAP) + BRICK_H / 2;
         const brick = this.add.rectangle(x, y, BRICK_W, BRICK_H, BRICK_COLORS[ch]);
+        brick.points = points;       // remembered for scoring when it breaks
         this.bricks.add(brick);
       }
     }
@@ -452,14 +457,16 @@ export class BreakoutScene extends Phaser.Scene {
   // Used by both the ball (hitBrick) and the laser (laserHitBrick).
   breakBrick(brick) {
     const bx = brick.x, by = brick.y, color = brick.fillColor;
+    const points = brick.points ?? BASE_POINTS;   // per-row value (top rows pay more)
     brick.destroy();
     Sound.brick();
 
     this.brickBurst.setParticleTint(color);
     this.brickBurst.emitParticleAt(bx, by, 10);
 
-    this.score += 10;
+    this.score += points;
     this.scoreText.setText("Score: " + this.score);
+    this.showPoints(bx, by, points, color);       // floating "+N" at the brick
     if (this.score > this.highScore) {            // live "Best" while ahead
       this.highScore = this.score;
       this.bestText.setText("Best: " + this.highScore);
@@ -523,6 +530,19 @@ export class BreakoutScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20);
     this.tweens.add({
       targets: t, alpha: 0, y: 225, duration: 900, ease: "Quad.easeOut",
+      onComplete: () => t.destroy()
+    });
+  }
+
+  // A small "+N" that pops where a brick broke, tinted to match it, so the
+  // per-row point difference is visible. Floats up briefly and fades.
+  showPoints(x, y, points, color) {
+    const hex = "#" + color.toString(16).padStart(6, "0");
+    const t = this.add.text(x, y, "+" + points, {
+      fontSize: "16px", color: hex, fontStyle: "bold"
+    }).setOrigin(0.5).setDepth(15);
+    this.tweens.add({
+      targets: t, alpha: 0, y: y - 28, duration: 600, ease: "Quad.easeOut",
       onComplete: () => t.destroy()
     });
   }
