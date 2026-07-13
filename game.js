@@ -1,8 +1,8 @@
 // ============================================================
-//  Breakout — levels, power-ups & high score
-//  Builds on the Scene-class version: multiple brick layouts you
-//  advance through, power-ups that drop from bricks (Wide / Multi /
-//  Slow), and a high score saved in the browser between sessions.
+//  Breakout — full game: title → play → game over
+//  Three scenes (Title, Breakout, GameOver) with multiple levels,
+//  power-ups that drop from bricks (Wide / Multi / Slow), and a high
+//  score saved in the browser between sessions.
 // ============================================================
 
 // ---- Tiny sound engine (Web Audio — no audio files to download) ----
@@ -103,6 +103,23 @@ const SLOW_FACTOR = 0.55;                 // ball speed multiplier while Slow is
 
 const HISCORE_KEY = "breakout.highScore";
 
+// High score persists in the browser between sessions. Wrapped in try/catch
+// because localStorage can throw in private mode / when storage is disabled.
+function getHighScore() {
+  try {
+    return Number(localStorage.getItem(HISCORE_KEY)) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+function setHighScore(value) {
+  try {
+    localStorage.setItem(HISCORE_KEY, String(value));
+  } catch (e) {
+    // Nothing we can do if storage is unavailable.
+  }
+}
+
 // ---- The game scene ----
 class BreakoutScene extends Phaser.Scene {
   constructor() {
@@ -123,6 +140,10 @@ class BreakoutScene extends Phaser.Scene {
     this.slowTimer = null;
 
     this.loadHighScore();
+
+    // Remember the best we started with, so Game Over can tell if this run
+    // set a NEW record (the live `highScore` gets bumped as we play).
+    this.previousBest = this.highScore;
 
     // Order matters: bricks and paddle must exist before we spawn a ball
     // (its colliders reference them); the trail needs a ball to follow.
@@ -383,20 +404,11 @@ class BreakoutScene extends Phaser.Scene {
 
   // --- High score persistence (localStorage) ---
   loadHighScore() {
-    this.highScore = 0;
-    try {
-      this.highScore = Number(localStorage.getItem(HISCORE_KEY)) || 0;
-    } catch (e) {
-      // Private mode / disabled storage → just run without a saved best.
-    }
+    this.highScore = getHighScore();
   }
 
   saveHighScore() {
-    try {
-      localStorage.setItem(HISCORE_KEY, String(this.highScore));
-    } catch (e) {
-      // Ignore — nothing we can do if storage is unavailable.
-    }
+    setHighScore(this.highScore);
   }
 
   // --- Collision callbacks ---
@@ -470,11 +482,16 @@ class BreakoutScene extends Phaser.Scene {
     this.physics.pause();
     this.balls.forEach(b => b.body && b.body.setVelocity(0, 0));
 
-    this.add.text(400, 300, message + "\nPress SPACE to play again", {
-      fontSize: "32px", color: "#f8fafc", align: "center"
-    }).setOrigin(0.5).setDepth(20);
-
-    this.input.keyboard.once("keydown-SPACE", () => this.scene.restart());
+    // Hold on the final frame for a beat, then hand off to the Game Over
+    // scene, passing it the result to display.
+    this.time.delayedCall(600, () => {
+      this.scene.start("GameOver", {
+        won: message === "YOU WIN!",
+        score: this.score,
+        best: this.highScore,
+        isNewBest: this.score > this.previousBest
+      });
+    });
   }
 
   // A brief centered message that floats up and fades (level-ups, pickups).
@@ -536,12 +553,106 @@ class BreakoutScene extends Phaser.Scene {
   }
 }
 
+// ---- Title scene ----
+// The first thing players see. Shows the game name, controls, the saved best,
+// and waits for SPACE to launch the gameplay scene.
+class TitleScene extends Phaser.Scene {
+  constructor() {
+    super("Title");
+  }
+
+  create() {
+    // A row of colored blocks as a simple decorative "wall" under the title.
+    const palette = [0xa78bfa, 0x818cf8, 0x60a5fa, 0x38bdf8, 0x22d3ee];
+    palette.forEach((color, i) => {
+      this.add.rectangle(280 + i * 60, 150, 52, 22, color);
+    });
+
+    this.add.text(400, 240, "BREAKOUT", {
+      fontSize: "64px", color: "#fbbf24", fontStyle: "bold"
+    }).setOrigin(0.5);
+
+    this.add.text(400, 320,
+      "Move: mouse or ← →     Break every brick across 3 levels\n" +
+      "Catch power-ups:  Wide · Multi-ball · Slow-mo", {
+      fontSize: "18px", color: "#e2e8f0", align: "center", lineSpacing: 8
+    }).setOrigin(0.5);
+
+    this.add.text(400, 400, "Best: " + getHighScore(), {
+      fontSize: "20px", color: "#94a3b8"
+    }).setOrigin(0.5);
+
+    // A gently pulsing prompt so it reads as "interactive".
+    const prompt = this.add.text(400, 470, "Press SPACE to start", {
+      fontSize: "26px", color: "#f8fafc"
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: prompt, alpha: 0.3, duration: 700, yoyo: true, repeat: -1
+    });
+
+    this.input.keyboard.once("keydown-SPACE", () => this.scene.start("Breakout"));
+  }
+}
+
+// ---- Game Over scene ----
+// Shown after a win or loss. Receives the result via init(data) and offers
+// a replay (SPACE) or a trip back to the title (T).
+class GameOverScene extends Phaser.Scene {
+  constructor() {
+    super("GameOver");
+  }
+
+  // Scenes started with a data object receive it here, before create().
+  init(data) {
+    this.won = data.won;
+    this.finalScore = data.score;
+    this.best = data.best;
+    this.isNewBest = data.isNewBest;
+  }
+
+  create() {
+    this.add.text(400, 210, this.won ? "YOU WIN!" : "GAME OVER", {
+      fontSize: "56px", fontStyle: "bold",
+      color: this.won ? "#34d399" : "#f87171"   // green win / soft red loss
+    }).setOrigin(0.5);
+
+    this.add.text(400, 300, "Score: " + this.finalScore, {
+      fontSize: "28px", color: "#e2e8f0"
+    }).setOrigin(0.5);
+
+    // Highlight a fresh record; otherwise just show the standing best.
+    if (this.isNewBest) {
+      this.add.text(400, 345, "NEW BEST!", {
+        fontSize: "24px", color: "#fbbf24", fontStyle: "bold"
+      }).setOrigin(0.5);
+    } else {
+      this.add.text(400, 345, "Best: " + this.best, {
+        fontSize: "22px", color: "#94a3b8"
+      }).setOrigin(0.5);
+    }
+
+    const prompt = this.add.text(400, 430, "Press SPACE to play again", {
+      fontSize: "24px", color: "#f8fafc"
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: prompt, alpha: 0.3, duration: 700, yoyo: true, repeat: -1
+    });
+
+    this.add.text(400, 470, "Press T for the title screen", {
+      fontSize: "18px", color: "#94a3b8"
+    }).setOrigin(0.5);
+
+    this.input.keyboard.once("keydown-SPACE", () => this.scene.start("Breakout"));
+    this.input.keyboard.once("keydown-T", () => this.scene.start("Title"));
+  }
+}
+
 // ---- Boot ----
 const config = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
-  backgroundColor: "#0f172a", // deep slate navy — calm, high-contrast base
+  backgroundColor: "#0f172a", // deep slate navy — shared by every scene
   physics: {
     default: "arcade",
     arcade: {
@@ -549,7 +660,8 @@ const config = {
       debug: false
     }
   },
-  scene: BreakoutScene
+  // The first scene in the array starts automatically → the title screen.
+  scene: [TitleScene, BreakoutScene, GameOverScene]
 };
 
 const game = new Phaser.Game(config);
