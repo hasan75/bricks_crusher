@@ -16,10 +16,14 @@ screen, three levels, power-ups, sound, and a persistent high score.
   Phaser scene, plus a **Pause overlay** layered on top of the frozen game.
 - **3 hand-designed levels** — full wall → pyramid → checkerboard, defined as
   simple text layouts in `config.js` (advance on clear; beat the last to win).
-- **Power-ups** (~18% drop from bricks, caught with the paddle):
-    - 🟢 **Wide** — grows the paddle for 8 seconds
-    - 🩷 **Multi-ball** — splits into extra balls (capped at 6)
-    - 🟠 **Slow-mo** — slows every ball for 6 seconds
+- **Power-ups** that drop from bricks and are caught with the paddle. Drops are
+  **leveled** — the chance rises each level and later levels unlock more types:
+  - 🟢 **Wide** — grows the paddle for 8 seconds
+  - 🩷 **Multi-ball** — splits into extra balls (capped at 6)
+  - 🟠 **Slow-mo** — slows every ball for 6 seconds
+  - 🔴 **Extra life** — +1 life
+  - 🟣 **Sticky** — the ball sticks to the paddle; tap **Space** to launch it
+  - 🔵 **Laser** — tap **Space** to fire bolts that break bricks
 - **3 lives** and a classic **angle bounce** (where the ball hits the paddle
   steers its direction), with the ball speeding up slightly per brick.
 - **High score** persisted between sessions via `localStorage`, with a live
@@ -38,6 +42,7 @@ screen, three levels, power-ups, sound, and a persistent high score.
 |--------|--------------|
 | Move paddle | **Mouse** or **← / →** arrow keys |
 | Start game (title) | **Space** |
+| Launch stuck ball / fire laser | **Space** (during play, with Sticky/Laser) |
 | Pause / resume | **Esc** |
 | Mute / unmute sound | **M** |
 | Play again (game over) | **Space** |
@@ -145,8 +150,9 @@ Open `src/config.js` and edit the `LEVELS` array. Each level is a list of
 ]
 ```
 
-To tweak the power-up drop rate, edit the `18` in `BreakoutScene.hitBrick`; to
-add or recolor power-ups, edit the `POWERUPS` table in `config.js`.
+To tune power-ups, edit `config.js`: `LEVEL_POWERUPS` sets which types each level
+can drop, `POWERUP_DROP_CHANCE` sets the per-level drop rate, and the `POWERUPS`
+table holds each one's color and name.
 
 ---
 
@@ -162,13 +168,13 @@ Built as a series of small, working checkpoints — each one adds a single conce
 - Juice pass (particles, trail, squash) and sound effects
 - Refactor into scene classes, then modularize into ES modules
 - Levels, power-ups & high score, plus title / game-over / pause scenes
+- More power-ups (Extra life, Sticky, Laser) with leveled drops
 
 ## 🧊 Ideas / roadmap
 
 Not yet implemented:
 
-- **More power-ups** — sticky paddle, laser, extra life; make drops level-scaled.
-- **Per-row scoring** — award more points for higher rows.
+- **Per-row scoring** — award more points for higher rows. *(up next)*
 - **Real sprite art** — swap the drawn rectangles/circles for loaded textures.
 
 ---
