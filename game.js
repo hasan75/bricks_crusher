@@ -1,8 +1,8 @@
 // ============================================================
-//  Breakout — full game: title → play → game over
-//  Three scenes (Title, Breakout, GameOver) with multiple levels,
-//  power-ups that drop from bricks (Wide / Multi / Slow), and a high
-//  score saved in the browser between sessions.
+//  Breakout — full game: title → play → game over (+ pause)
+//  Four scenes (Title, Breakout, GameOver, Pause) with multiple
+//  levels, power-ups that drop from bricks (Wide / Multi / Slow), a
+//  pause overlay (Esc), and a high score saved between sessions.
 // ============================================================
 
 // ---- Tiny sound engine (Web Audio — no audio files to download) ----
@@ -169,6 +169,15 @@ class BreakoutScene extends Phaser.Scene {
   // --- Keyboard input ---
   buildInput() {
     this.cursors = this.input.keyboard.createCursorKeys();
+
+    // Esc pauses: freeze this scene and launch the Pause overlay on top.
+    // A paused scene stops processing input, so this won't re-fire until we
+    // resume — and the Pause scene owns the "resume" key.
+    this.input.keyboard.on("keydown-ESC", () => {
+      if (this.gameOver) return;       // ignore during the end-game hand-off
+      this.scene.pause();
+      this.scene.launch("Pause");
+    });
   }
 
   // --- The brick wall (persistent group, refilled per level) ---
@@ -358,6 +367,11 @@ class BreakoutScene extends Phaser.Scene {
       Sound.toggle();
       this.muteText.setText(Sound.label());
     });
+
+    // Pause hint, bottom-center.
+    this.add.text(400, 580, "Esc: pause", {
+      fontSize: "13px", color: "#64748b"
+    }).setOrigin(0.5, 1);
   }
 
   // --- Juice: particle burst + ball trail ---
@@ -647,6 +661,43 @@ class GameOverScene extends Phaser.Scene {
   }
 }
 
+// ---- Pause scene ----
+// An overlay launched ON TOP of a paused BreakoutScene (via scene.launch, so
+// both exist at once). Because Breakout is paused, its physics, tweens, and
+// timers all freeze; this scene stays live to catch the resume/quit keys.
+class PauseScene extends Phaser.Scene {
+  constructor() {
+    super("Pause");
+  }
+
+  create() {
+    // Dim the frozen gameplay behind us so the overlay reads clearly.
+    this.add.rectangle(0, 0, 800, 600, 0x0f172a, 0.72).setOrigin(0);
+
+    this.add.text(400, 250, "PAUSED", {
+      fontSize: "52px", color: "#f8fafc", fontStyle: "bold"
+    }).setOrigin(0.5);
+
+    this.add.text(400, 330, "Press ESC to resume", {
+      fontSize: "22px", color: "#e2e8f0"
+    }).setOrigin(0.5);
+
+    this.add.text(400, 372, "Press T for the title screen", {
+      fontSize: "16px", color: "#94a3b8"
+    }).setOrigin(0.5);
+
+    this.input.keyboard.once("keydown-ESC", () => {
+      this.scene.stop();               // close this overlay...
+      this.scene.resume("Breakout");   // ...and un-freeze the game
+    });
+
+    this.input.keyboard.once("keydown-T", () => {
+      this.scene.stop("Breakout");     // fully end the paused game
+      this.scene.start("Title");       // start() also stops this Pause scene
+    });
+  }
+}
+
 // ---- Boot ----
 const config = {
   type: Phaser.AUTO,
@@ -661,7 +712,7 @@ const config = {
     }
   },
   // The first scene in the array starts automatically → the title screen.
-  scene: [TitleScene, BreakoutScene, GameOverScene]
+  scene: [TitleScene, BreakoutScene, GameOverScene, PauseScene]
 };
 
 const game = new Phaser.Game(config);
