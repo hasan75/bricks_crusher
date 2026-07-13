@@ -35,9 +35,9 @@ screen, three levels, power-ups, sound, and a persistent high score.
   visible **mute toggle** (press `M`).
 - **Juice** — particle bursts when bricks break, a ball trail, a paddle-squash
   tween, and floating toast messages for level-ups and pickups.
-- **Sprite art** — rounded, beveled "Kenney-style" sprites (paddle, ball, bricks,
-  power-ups, laser) generated at runtime in `textures.js` and recolored via tint —
-  no image files to download.
+- **Sprite art** — real **Kenney "Puzzle Pack"** (CC0) sprites for the paddle,
+  ball, bricks, and power-ups, loaded from `assets/` and recolored per row/type
+  via tint (the laser bolt and break-burst are generated in code).
 
 ---
 
@@ -83,11 +83,13 @@ game_dev/
 ├── index.html            # loads Phaser (CDN) + src/main.js as a module
 ├── package.json          # provides the local-server "start" script only
 ├── README.md
+├── assets/               # Kenney "Puzzle Pack" (CC0) sprite PNGs
 └── src/
     ├── main.js           # entry point: builds the Phaser.Game from the scenes
     ├── config.js         # pure data: canvas size, colors, LEVELS, POWERUPS
     ├── sound.js          # the Web-Audio Sound engine (synthesized tones)
-    ├── textures.js       # ensureTextures(): generates the sprite art at runtime
+    ├── assets.js         # preloadSprites(): loads the Kenney PNGs
+    ├── textures.js       # ensureTextures(): generates the laser + burst sprites
     ├── storage.js        # getHighScore / setHighScore (localStorage)
     └── scenes/
         ├── TitleScene.js     # name, controls, best score → Space to start
@@ -176,19 +178,24 @@ Built as a series of small, working checkpoints — each one adds a single conce
 - Levels, power-ups & high score, plus title / game-over / pause scenes
 - More power-ups (Extra life, Sticky, Laser) with leveled drops
 - Per-row scoring (higher rows pay more)
-- Sprite art — runtime-generated "Kenney-style" textures
+- Sprite art — real Kenney "Puzzle Pack" (CC0) PNGs, recolored via tint
 
 ## 🧊 Ideas / roadmap
 
 The planned roadmap is complete. Possible next steps:
 
-- **Real art pack** — swap the runtime textures for a downloaded Kenney sprite
-  sheet (load PNGs in each scene's `preload()`, drop the makers in `textures.js`).
 - **Themed background** / parallax instead of the flat navy.
-- **Animated sprites** and more levels / an endless mode.
+- **Animated sprites** (brick crack frames, a pulsing power-up).
+- **More levels** and a level-select / endless mode.
 
 ---
 
+## 🙏 Credits
+
+- Sprites: **Kenney "Puzzle Pack"** — [kenney.nl](https://kenney.nl/assets/puzzle-pack)
+  (CC0 / public domain).
+- Framework: **Phaser 3**.
+
 ## 📄 License
 
-MIT
+MIT (game code). Bundled art assets are CC0 — see Credits.

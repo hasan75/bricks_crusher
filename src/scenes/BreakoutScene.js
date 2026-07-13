@@ -4,6 +4,7 @@
 import { Sound } from "../sound.js";
 import { getHighScore, setHighScore } from "../storage.js";
 import { ensureTextures } from "../textures.js";
+import { preloadSprites } from "../assets.js";
 import {
   BRICK_COLORS, LEVELS, POWERUPS, POWERUP_TYPES,
   LEVEL_POWERUPS, POWERUP_DROP_CHANCE, SLOW_FACTOR,
@@ -16,8 +17,9 @@ export class BreakoutScene extends Phaser.Scene {
   }
 
   preload() {
-    // Sound is synthesized and the particle texture is generated in create(),
-    // so there are no files to load.
+    // Load the Kenney sprite PNGs; the laser + burst textures are generated in
+    // create() (ensureTextures), so there's nothing else to load here.
+    preloadSprites(this);
   }
 
   create() {
@@ -35,8 +37,8 @@ export class BreakoutScene extends Phaser.Scene {
 
     this.loadHighScore();
 
-    // Bake the sprite textures (rounded/beveled "Kenney-style") into the cache
-    // before we build anything, so every object below is a textured image.
+    // Bake the runtime textures (laser bolt + white burst spark) into the
+    // cache before we build anything. The rest of the art is loaded in preload.
     ensureTextures(this);
 
     // Remember the best we started with, so Game Over can tell if this run
@@ -56,8 +58,9 @@ export class BreakoutScene extends Phaser.Scene {
 
   // --- The paddle ---
   buildPaddle() {
-    // The "paddle" sprite is 100×20, so 100 stays its base width; the Wide
-    // power-up SCALES it (see setPaddleScale) rather than resizing geometry.
+    // The Kenney "paddle" sprite (104×24). The Wide power-up SCALES it; the
+    // arcade body tracks the scale automatically (body = sourceWidth × scale),
+    // so there's no geometry to resize by hand.
     this.paddle = this.add.image(400, 550, "paddle");
     this.physics.add.existing(this.paddle);
     this.paddle.body.setImmovable(true);
@@ -102,7 +105,9 @@ export class BreakoutScene extends Phaser.Scene {
     this.bricks.clear(true, true);   // destroy any leftover bricks first
 
     const layout = LEVELS[this.level];
-    const BRICK_W = 64, BRICK_H = 24, GAP = 8, OFFSET_X = 44, OFFSET_Y = 80;
+    // BRICK_W/H match the "brick" sprite's native size (64×32) so the static
+    // physics bodies line up without scaling.
+    const BRICK_W = 64, BRICK_H = 32, GAP = 8, OFFSET_X = 44, OFFSET_Y = 72;
 
     for (let row = 0; row < layout.length; row++) {
       const line = layout[row];
@@ -115,7 +120,7 @@ export class BreakoutScene extends Phaser.Scene {
         const x = OFFSET_X + col * (BRICK_W + GAP) + BRICK_W / 2;
         const y = OFFSET_Y + row * (BRICK_H + GAP) + BRICK_H / 2;
         const color = BRICK_COLORS[ch];
-        // Grayscale "brick" sprite, recolored per row via tint.
+        // Grey "brick" sprite (64×32), recolored per row via tint.
         const brick = this.add.image(x, y, "brick").setTint(color);
         brick.points = points;       // remembered for scoring when it breaks
         brick.hitColor = color;      // remembered for the burst + "+N" popup
@@ -138,9 +143,10 @@ export class BreakoutScene extends Phaser.Scene {
 
   // Create one ball with its own colliders and add it to the array.
   spawnBall(x, y, vx, vy) {
-    const ball = this.add.image(x, y, "ball");
+    // Grey "ball" sprite (22×22) tinted amber; a radius-11 circle body fills it.
+    const ball = this.add.image(x, y, "ball").setTint(0xfbbf24);
     this.physics.add.existing(ball);
-    ball.body.setCircle(10);
+    ball.body.setCircle(11);
     ball.body.setBounce(1, 1);
     ball.body.setCollideWorldBounds(true);
     ball.body.setVelocity(vx, vy);
@@ -185,10 +191,12 @@ export class BreakoutScene extends Phaser.Scene {
     // Only drop power-ups unlocked at the current level.
     const list = LEVEL_POWERUPS[this.level] || POWERUP_TYPES;
     const type = list[Phaser.Math.Between(0, list.length - 1)];
-    // Grayscale "powerup" capsule sprite, recolored per type via tint.
+    // Grey "powerup" square sprite (32×32) tinted per type. Enable the body
+    // first, THEN scale down, so the arcade body re-tracks to the display size.
     const pu = this.add.image(x, y, "powerup").setTint(POWERUPS[type].color);
-    pu.puType = type;                // remember which power-up this is
     this.physics.add.existing(pu);
+    pu.setDisplaySize(28, 28);
+    pu.puType = type;                // remember which power-up this is
     pu.body.setAllowGravity(false);  // world gravity is 0; we push it down
     pu.body.setVelocity(0, 130);     // drift toward the paddle
     this.powerups.add(pu);
@@ -223,9 +231,8 @@ export class BreakoutScene extends Phaser.Scene {
   }
 
   setPaddleScale(scale) {
+    // Scale X only; the arcade body follows via sourceWidth × scaleX.
     this.paddle.setScale(scale, 1);
-    // Body width tracks the visual; `true` re-centers the body on the paddle.
-    this.paddle.body.setSize(100 * scale, 20, true);
   }
 
   // Spawn two extra balls from the primary ball, angled left and right.
@@ -387,12 +394,12 @@ export class BreakoutScene extends Phaser.Scene {
       emitting: false
     });
 
-    this.ballTrail = this.add.particles(0, 0, "spark", {
+    this.ballTrail = this.add.particles(0, 0, "starSmall", {
       speed: 0,
       lifespan: 250,
       frequency: 25,
-      scale: { start: 0.8, end: 0 },
-      alpha: { start: 0.45, end: 0 },
+      scale: { start: 0.9, end: 0 },
+      alpha: { start: 0.5, end: 0 },
       tint: 0xfbbf24
     });
     // Follow the primary ball. We track the target ourselves so update() can
