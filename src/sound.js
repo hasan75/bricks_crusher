@@ -41,6 +41,7 @@ export const Sound = {
   brick()  { this.tone(660, 60, 0.05); },  // crisp high blip
   paddle() { this.tone(330, 50, 0.04); },  // low, quietest — happens most
   power()  { this.tone(520, 90, 0.05); },  // pleasant "got it" chirp
+  laser()  { this.tone(720, 40, 0.03); },  // soft, very short pew
   lose()   { this.tone(200, 200, 0.06); }, // low, longer "aww"
   win()    { this.tone(880, 160, 0.06); }, // bright chime
 

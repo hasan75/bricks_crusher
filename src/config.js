@@ -47,7 +47,22 @@ export const LEVELS = [
 export const POWERUPS = {
   W: { color: 0x34d399, name: "Wide" },   // green
   M: { color: 0xf472b6, name: "Multi" },  // pink
-  S: { color: 0xfb923c, name: "Slow" }    // orange
+  S: { color: 0xfb923c, name: "Slow" },   // orange
+  E: { color: 0xef4444, name: "Life" },   // red
+  K: { color: 0xc084fc, name: "Sticky" }, // purple
+  L: { color: 0x22d3ee, name: "Laser" }   // cyan
 };
-export const POWERUP_TYPES = ["W", "M", "S"];
+// Every type, in legend order (shown in the HUD legend at the bottom).
+export const POWERUP_TYPES = ["W", "M", "S", "E", "K", "L"];
+
+// Leveled drops: which power-ups each level can drop, and the drop chance (%)
+// per brick. Later levels unlock more (and rarer) power-ups and drop a bit more
+// often. Indexed by level number (0-based), same order as LEVELS.
+export const LEVEL_POWERUPS = [
+  ["W", "M", "S"],                     // Level 1 — the basics
+  ["W", "M", "S", "E", "K"],           // Level 2 — adds Life + Sticky
+  ["W", "M", "S", "E", "K", "L"]       // Level 3 — everything, incl. Laser
+];
+export const POWERUP_DROP_CHANCE = [16, 20, 24]; // % per brick, by level
+
 export const SLOW_FACTOR = 0.55;           // ball speed multiplier while Slow is active

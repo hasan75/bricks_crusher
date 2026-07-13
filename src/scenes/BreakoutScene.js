@@ -3,7 +3,10 @@
 // module), so we don't import it; we only import our own modules.
 import { Sound } from "../sound.js";
 import { getHighScore, setHighScore } from "../storage.js";
-import { BRICK_COLORS, LEVELS, POWERUPS, POWERUP_TYPES, SLOW_FACTOR } from "../config.js";
+import {
+  BRICK_COLORS, LEVELS, POWERUPS, POWERUP_TYPES,
+  LEVEL_POWERUPS, POWERUP_DROP_CHANCE, SLOW_FACTOR
+} from "../config.js";
 
 export class BreakoutScene extends Phaser.Scene {
   constructor() {
@@ -22,6 +25,11 @@ export class BreakoutScene extends Phaser.Scene {
     this.slowActive = false;
     this.wideTimer = null;
     this.slowTimer = null;
+    this.stickyActive = false;
+    this.stickyTimer = null;
+    this.laserActive = false;
+    this.laserTimer = null;
+    this.lastFire = 0;
 
     this.loadHighScore();
 
@@ -61,6 +69,19 @@ export class BreakoutScene extends Phaser.Scene {
       if (this.gameOver) return;       // ignore during the end-game hand-off
       this.scene.pause();
       this.scene.launch("Pause");
+    });
+
+    // Space does double duty: release any ball stuck to the paddle (Sticky
+    // power-up), otherwise fire the lasers (Laser power-up). Harmless if
+    // neither is active.
+    this.input.keyboard.on("keydown-SPACE", () => {
+      if (this.gameOver) return;
+      const stuck = this.balls.filter(b => b._stuck);
+      if (stuck.length) {
+        stuck.forEach(b => this.launchBall(b));
+      } else if (this.laserActive) {
+        this.fireLasers();
+      }
     });
   }
 
@@ -138,10 +159,19 @@ export class BreakoutScene extends Phaser.Scene {
   buildPowerups() {
     this.powerups = this.add.group();
     this.physics.add.overlap(this.paddle, this.powerups, this.collectPowerup, null, this);
+
+    // Laser bolts fired by the paddle (Laser power-up); they destroy bricks.
+    // A PLAIN group (like `powerups` above): we enable a body per bolt in
+    // fireLasers(). A physics group would reset each bolt's velocity to its
+    // group default (0,0) on add, freezing the bolts on the paddle.
+    this.lasers = this.add.group();
+    this.physics.add.overlap(this.lasers, this.bricks, this.laserHitBrick, null, this);
   }
 
   spawnPowerup(x, y) {
-    const type = POWERUP_TYPES[Phaser.Math.Between(0, POWERUP_TYPES.length - 1)];
+    // Only drop power-ups unlocked at the current level.
+    const list = LEVEL_POWERUPS[this.level] || POWERUP_TYPES;
+    const type = list[Phaser.Math.Between(0, list.length - 1)];
     const pu = this.add.rectangle(x, y, 26, 16, POWERUPS[type].color)
       .setStrokeStyle(2, 0x0f172a);
     pu.puType = type;                // remember which power-up this is
@@ -160,9 +190,12 @@ export class BreakoutScene extends Phaser.Scene {
   }
 
   applyPowerup(type) {
-    if (type === "W")      { this.widenPaddle(); this.showToast("WIDE PADDLE"); }
-    else if (type === "M") { this.multiBall();   this.showToast("MULTI-BALL"); }
-    else if (type === "S") { this.slowMo();      this.showToast("SLOW-MO"); }
+    if (type === "W")      { this.widenPaddle();  this.showToast("WIDE PADDLE"); }
+    else if (type === "M") { this.multiBall();    this.showToast("MULTI-BALL"); }
+    else if (type === "S") { this.slowMo();       this.showToast("SLOW-MO"); }
+    else if (type === "E") { this.extraLife();    this.showToast("EXTRA LIFE"); }
+    else if (type === "K") { this.stickyPaddle(); this.showToast("STICKY PADDLE"); }
+    else if (type === "L") { this.laserPaddle();  this.showToast("LASER"); }
   }
 
   // Scale the paddle wider for a while. Scaling (not resizing geometry) keeps
@@ -208,6 +241,69 @@ export class BreakoutScene extends Phaser.Scene {
     });
   }
 
+  // Grant one extra life. The simplest power-up: no timer, no cleanup.
+  extraLife() {
+    this.lives += 1;
+    this.livesText.setText("Lives: " + this.lives);
+  }
+
+  // Sticky paddle: for a while, a ball that hits the paddle sticks to it
+  // (see hitPaddle) until the player taps Space to launch it (see buildInput).
+  stickyPaddle() {
+    this.stickyActive = true;
+    if (this.stickyTimer) this.stickyTimer.remove();      // refresh, don't stack
+    this.stickyTimer = this.time.delayedCall(8000, () => {
+      this.stickyActive = false;
+      // Auto-launch anything still stuck when the effect wears off.
+      this.balls.forEach(b => { if (b._stuck) this.launchBall(b); });
+      this.stickyTimer = null;
+    });
+  }
+
+  // Attach a ball to the paddle, remembering where along it the ball landed.
+  stickBall(ball) {
+    ball._stuck = true;
+    ball._stickOffset = ball.x - this.paddle.x;
+    ball.body.setVelocity(0, 0);
+    Sound.paddle();
+  }
+
+  // Release a stuck ball: fire it upward, angled by where it sat on the paddle.
+  launchBall(ball) {
+    ball._stuck = false;
+    const offset = ball._stickOffset || 0;
+    ball.body.setVelocity(offset * 5, -300);
+    if (this.slowActive) ball.body.velocity.scale(SLOW_FACTOR);
+    Sound.paddle();
+  }
+
+  // Laser paddle: for a while, Space fires bolts that break bricks (see
+  // buildInput → fireLasers). Just flips a flag on a timer.
+  laserPaddle() {
+    this.laserActive = true;
+    if (this.laserTimer) this.laserTimer.remove();        // refresh, don't stack
+    this.laserTimer = this.time.delayedCall(8000, () => {
+      this.laserActive = false;
+      this.laserTimer = null;
+    });
+  }
+
+  // Fire two bolts from the paddle edges, rate-limited so a held key can't spam.
+  fireLasers() {
+    const now = this.time.now;
+    if (now - this.lastFire < 260) return;
+    this.lastFire = now;
+    [-1, 1].forEach(side => {
+      const lx = this.paddle.x + side * (this.paddle.displayWidth / 2 - 6);
+      const bolt = this.add.rectangle(lx, this.paddle.y - 16, 4, 14, 0x22d3ee);
+      this.physics.add.existing(bolt);
+      bolt.body.setAllowGravity(false);
+      bolt.body.setVelocity(0, -520);
+      this.lasers.add(bolt);
+    });
+    Sound.laser();
+  }
+
   // Undo any active power-up effects and remove falling capsules. Called when
   // re-serving after a life and when moving to a new level.
   resetEffects() {
@@ -215,6 +311,11 @@ export class BreakoutScene extends Phaser.Scene {
     this.setPaddleScale(1);
     if (this.slowTimer) { this.slowTimer.remove(); this.slowTimer = null; }
     this.slowActive = false;
+    if (this.stickyTimer) { this.stickyTimer.remove(); this.stickyTimer = null; }
+    this.stickyActive = false;
+    if (this.laserTimer) { this.laserTimer.remove(); this.laserTimer = null; }
+    this.laserActive = false;
+    this.lasers.clear(true, true);
     this.powerups.clear(true, true);
   }
 
@@ -223,6 +324,11 @@ export class BreakoutScene extends Phaser.Scene {
     this.score = 0;
     this.scoreText = this.add.text(16, 16, "Score: 0", {
       fontSize: "20px", color: "#e2e8f0"
+    });
+
+    // Control hints, tucked under the score (top-left).
+    this.add.text(16, 44, "Esc: pause   ·   Space: launch / fire laser", {
+      fontSize: "12px", color: "#64748b"
     });
 
     this.bestText = this.add.text(400, 16, "Best: " + this.highScore, {
@@ -234,13 +340,16 @@ export class BreakoutScene extends Phaser.Scene {
       fontSize: "20px", color: "#e2e8f0"
     }).setOrigin(1, 0);
 
-    // Power-up legend, bottom-left: a colored chip + name for each type.
-    POWERUP_TYPES.forEach((t, i) => {
-      const x = 16 + i * 92;
-      this.add.rectangle(x, 580, 12, 12, POWERUPS[t].color).setOrigin(0, 1);
-      this.add.text(x + 16, 580, POWERUPS[t].name, {
+    // Power-up legend, bottom-left: a colored chip + name for each type. We lay
+    // them out with a running x using each label's measured width, so all six
+    // fit without overlapping.
+    let lx = 14;
+    POWERUP_TYPES.forEach((t) => {
+      this.add.rectangle(lx, 580, 12, 12, POWERUPS[t].color).setOrigin(0, 1);
+      const label = this.add.text(lx + 16, 580, POWERUPS[t].name, {
         fontSize: "13px", color: "#94a3b8"
       }).setOrigin(0, 1);
+      lx += 16 + label.width + 14;
     });
 
     // Mute toggle (accessibility): visible control + keyboard shortcut.
@@ -251,11 +360,6 @@ export class BreakoutScene extends Phaser.Scene {
       Sound.toggle();
       this.muteText.setText(Sound.label());
     });
-
-    // Pause hint, bottom-center.
-    this.add.text(400, 580, "Esc: pause", {
-      fontSize: "13px", color: "#64748b"
-    }).setOrigin(0.5, 1);
   }
 
   // --- Juice: particle burst + ball trail ---
@@ -313,6 +417,11 @@ export class BreakoutScene extends Phaser.Scene {
 
   // Classic Breakout feel: where the ball hits the paddle steers its angle.
   hitPaddle(ball, paddle) {
+    // Sticky power-up: catch the ball instead of bouncing it (until Space).
+    if (this.stickyActive && !ball._stuck) {
+      this.stickBall(ball);
+      return;
+    }
     const offset = ball.x - paddle.x;
     ball.body.setVelocityX(offset * 5);
     Sound.paddle();
@@ -323,6 +432,25 @@ export class BreakoutScene extends Phaser.Scene {
   }
 
   hitBrick(ball, brick) {
+    this.breakBrick(brick);
+
+    // Speed up (capped so the ball can't tunnel through the paddle).
+    if (ball.body.velocity.length() < 500) {
+      ball.body.velocity.scale(1.03);
+    }
+  }
+
+  // A laser bolt hits a brick: destroy both. Guard against a bolt or brick
+  // already consumed this frame (overlap can fire more than once).
+  laserHitBrick(laser, brick) {
+    if (!laser.active || !brick.active) return;
+    laser.destroy();
+    this.breakBrick(brick);
+  }
+
+  // Shared brick destruction: particles, sound, score, and the leveled drop.
+  // Used by both the ball (hitBrick) and the laser (laserHitBrick).
+  breakBrick(brick) {
     const bx = brick.x, by = brick.y, color = brick.fillColor;
     brick.destroy();
     Sound.brick();
@@ -337,13 +465,9 @@ export class BreakoutScene extends Phaser.Scene {
       this.bestText.setText("Best: " + this.highScore);
     }
 
-    // Speed up (capped so the ball can't tunnel through the paddle).
-    if (ball.body.velocity.length() < 500) {
-      ball.body.velocity.scale(1.03);
-    }
-
-    // ~18% of bricks drop a power-up.
-    if (Phaser.Math.Between(1, 100) <= 18) {
+    // Leveled chance to drop a power-up (rises with the level).
+    const chance = POWERUP_DROP_CHANCE[this.level] ?? 18;
+    if (Phaser.Math.Between(1, 100) <= chance) {
       this.spawnPowerup(bx, by);
     }
   }
@@ -432,6 +556,12 @@ export class BreakoutScene extends Phaser.Scene {
       if (pus[i].y > 600) pus[i].destroy();
     }
 
+    // Clean up laser bolts that flew off the top.
+    const bolts = this.lasers.getChildren();
+    for (let i = bolts.length - 1; i >= 0; i--) {
+      if (bolts[i].y < -20) bolts[i].destroy();
+    }
+
     // Level cleared → advance (or win).
     if (this.bricks.countActive() === 0) {
       this.advanceLevel();
@@ -448,5 +578,15 @@ export class BreakoutScene extends Phaser.Scene {
     // Clamp using the CURRENT half-width (it changes with the Wide power-up).
     const half = this.paddle.displayWidth / 2;
     this.paddle.x = Phaser.Math.Clamp(this.paddle.x, half, 800 - half);
+
+    // Carry any stuck balls (Sticky power-up) along with the paddle, resting
+    // just above it, until the player launches them with Space.
+    this.balls.forEach(b => {
+      if (b._stuck) {
+        b.x = Phaser.Math.Clamp(this.paddle.x + b._stickOffset, 12, 788);
+        b.y = this.paddle.y - 22;
+        b.body.setVelocity(0, 0);
+      }
+    });
   }
 }

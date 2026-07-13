@@ -20,7 +20,8 @@ export class TitleScene extends Phaser.Scene {
 
     this.add.text(400, 320,
       "Move: mouse or ← →     Break every brick across 3 levels\n" +
-      "Catch power-ups:  Wide · Multi-ball · Slow-mo", {
+      "Power-ups: Wide · Multi · Slow · Life · Sticky · Laser\n" +
+      "Space: launch a stuck ball / fire the laser", {
       fontSize: "18px", color: "#e2e8f0", align: "center", lineSpacing: 8
     }).setOrigin(0.5);
 
