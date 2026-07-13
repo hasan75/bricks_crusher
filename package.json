@@ -1,0 +1,13 @@
+{
+  "name": "breakout-phaser",
+  "version": "1.0.0",
+  "description": "A teaching Breakout game built with Phaser 3, as native ES modules (no build step).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "serve": "npx --yes serve ."
+  },
+  "keywords": ["phaser", "breakout", "game"],
+  "license": "MIT"
+}

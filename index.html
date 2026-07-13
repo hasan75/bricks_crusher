@@ -15,11 +15,13 @@
     }
   </style>
 
-  <!-- Load the Phaser 3 game framework from a CDN (no install needed) -->
+  <!-- Load the Phaser 3 game framework from a CDN (no install needed).
+       This classic script runs first, defining the global `Phaser` that our
+       ES modules reference. -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
 </head>
 <body>
-  <!-- Our game code -->
-  <script src="game.js"></script>
+  <!-- Our game code, as native ES modules (no build step needed). -->
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
